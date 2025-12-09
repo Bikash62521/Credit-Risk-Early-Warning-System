@@ -1,0 +1,6 @@
+﻿,Customer_ID,Credit_Limit,Utilisation_%,DPD,Monthly_Spend_Change,Min_Due_Flag,Merchant_Mix_Index,Cash_Withdrawal_Frequency,Delinquent_30Plus,Risk_Probability,Risk_Label,High_Utilisation_Flag,Min_Due_Behavior_Flag,Spend_Stress_Flag,Essential_Spend_Spike_Flag,DPD_Early_Warning,Roll_Rate_Risk,Severe_Roll_Risk,Recommended_Action
+0,C0001,141958,13,0,-0.26,0,0.39,5,0,0.05252915452884346,Low Risk,0,0,0,0,0,0,0, No action needed
+1,C0002,166867,94,0,0.35,1,0.7,6,1,0.9226149448758386,High Risk,1,1,0,0,0,0,0, Proactive outreach: Offer payment plan/EMI options
+2,C0003,151932,57,0,-0.38,0,0.68,9,0,0.09489487743602787,Low Risk,0,0,0,0,0,0,0, No action needed
+3,C0004,123694,6,0,-0.64,0,0.35,6,0,0.19472633211075177,Low Risk,0,0,1,0,0,0,0, No action needed
+4,C0005,139879,88,0,-0.34,1,0.53,9,1,0.9072102293816371,High Risk,1,1,0,0,0,0,0, Proactive outreach: Offer payment plan/EMI options
