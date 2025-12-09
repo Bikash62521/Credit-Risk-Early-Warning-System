@@ -11,16 +11,17 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 
-
-# STREAMLIT SETTINGS
+# ==================================================
+# STREAMLIT APP SETTINGS
 
 st.set_page_config(page_title="Credit Risk Predictor", layout="wide")
 
+# Title and short description
 st.title("🔍 Credit Card Early Risk Detection System")
 st.write("Upload CSV/XLSX → Get Risk Analysis → Download PDF & Excel outputs.")
 
 
-# REQUIRED COLUMNS
+# REQUIRED COLUMNS EXPECTED IN THE FILE
 
 required_cols = [
     "Credit_Limit",
@@ -32,14 +33,14 @@ required_cols = [
     "Cash_Withdrawal_Frequency"
 ]
 
-
-# FILE UPLOAD
+# FILE UPLOAD COMPONENT
 
 uploaded_file = st.file_uploader("Upload CSV or Excel File", type=["csv", "xlsx"])
 
 if uploaded_file:
     name = uploaded_file.name.lower()
 
+    # Read CSV or Excel
     if name.endswith(".csv"):
         df = pd.read_csv(uploaded_file)
         st.success("CSV loaded successfully!")
@@ -47,11 +48,11 @@ if uploaded_file:
         df = pd.read_excel(uploaded_file)
         st.success("Excel file loaded successfully!")
 
+    # Show preview
     st.write("📄 **Data Preview**")
     st.dataframe(df.head())
 
-
-    # CHECK REQUIRED COLUMNS
+    # CHECK WHETHER ALL REQUIRED COLUMNS EXIST
 
     missing = [c for c in required_cols if c not in df.columns]
     if missing:
@@ -59,9 +60,11 @@ if uploaded_file:
         st.stop()
 
 
-    # AUTO-GENERATE TARGET IF MISSING
+    # AUTO-GENERATE TARGET COLUMN IF NOT PRESENT
 
     if "Delinquent_30Plus" not in df.columns:
+
+        # Rule-based conditions to estimate delinquency
         df["Delinquent_30Plus"] = (
             (df["Utilisation_%"] > 80).astype(int) +
             (df["Min_Due_Flag"] == 1).astype(int) +
@@ -69,17 +72,21 @@ if uploaded_file:
             (df["Monthly_Spend_Change"] < -0.4).astype(int) +
             (df["Merchant_Mix_Index"] < 0.3).astype(int)
         )
+
+        # Final binary target (>= 2 conditions)
         df["Delinquent_30Plus"] = (df["Delinquent_30Plus"] >= 2).astype(int)
 
-
-    # ML MODEL
-
+    # ==================================================
+    # MACHINE LEARNING MODEL TRAINING
+    # ==================================================
     X = df[required_cols]
     y = df["Delinquent_30Plus"]
 
+    # Scale the features
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
 
+    # Random forest model
     model = RandomForestClassifier(
         n_estimators=200,
         max_depth=5,
@@ -88,14 +95,17 @@ if uploaded_file:
     )
     model.fit(X_scaled, y)
 
+    # Model outputs
     df["Risk_Probability"] = model.predict_proba(X_scaled)[:, 1]
+
+    # Convert probability → labels
     df["Risk_Label"] = pd.cut(
         df["Risk_Probability"],
         bins=[0, 0.33, 0.66, 1],
         labels=["Low Risk", "Medium Risk", "High Risk"]
     )
 
-    # PORTFOLIO SUMMARY
+    # SUMMARY SECTION
 
     st.subheader("📊 Portfolio Summary")
 
@@ -104,14 +114,14 @@ if uploaded_file:
     avg_util = df["Utilisation_%"].mean()
     avg_dpd = df["DPD"].mean()
 
+    # Dashboard metrics
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Total Customers", total_customers)
     c2.metric("High Risk %", f"{high_risk_pct:.2f}%")
     c3.metric("Avg Utilisation %", f"{avg_util:.2f}")
     c4.metric("Avg DPD", f"{avg_dpd:.2f}")
 
-
-    # BEHAVIORAL FLAGS
+    # FLAG GENERATION (Behavioral)
 
     df["High_Utilisation_Flag"] = (df["Utilisation_%"] > 80).astype(int)
     df["Min_Due_Behavior_Flag"] = (df["Min_Due_Flag"] == 1).astype(int)
@@ -122,28 +132,28 @@ if uploaded_file:
     df["Severe_Roll_Risk"] = (df["DPD"] == 60).astype(int)
 
 
-    # RECOMMENDED ACTIONS
+    # RECOMMENDED ACTIONS BASED ON RISK
 
     def action_map(risk):
         if risk == "Low Risk":
-            return " No action needed"
+            return "👍 No action needed"
         if risk == "Medium Risk":
             return "⚠ Send reminder and encourage full payment"
         if risk == "High Risk":
-            return " Proactive outreach: Offer payment plan/EMI options"
+            return "🚨 Proactive outreach: Offer payment plan/EMI options"
         return "Unknown"
 
     df["Recommended_Action"] = df["Risk_Label"].apply(action_map)
 
-    st.subheader(" Risk + Flags + Actions Table")
+    st.subheader("🎯 Risk + Flags + Actions Table")
     st.dataframe(df.head())
 
 
-    # VISUALIZATIONS
+    # VISUALIZATION (GAUGE + PIE)
 
     avg_risk = df["Risk_Probability"].mean()
 
-    # Gauge
+    # Portfolio gauge
     g = go.Figure(go.Indicator(
         mode="gauge+number",
         value=avg_risk,
@@ -159,7 +169,7 @@ if uploaded_file:
     ))
     st.plotly_chart(g, use_container_width=True)
 
-    # Pie chart
+    # Pie chart for distribution
     pie = px.pie(
         df,
         names="Risk_Label",
@@ -170,7 +180,7 @@ if uploaded_file:
     st.plotly_chart(pie, use_container_width=True)
 
 
-    # EXCEL EXPORT WITH COLORS
+    # EXCEL EXPORT WITH COLOR CODING
 
     output_excel = "Risk_Report_Colored.xlsx"
     df.to_excel(output_excel, index=False)
@@ -178,35 +188,37 @@ if uploaded_file:
     wb = load_workbook(output_excel)
     ws = wb.active
 
+    # Color formats
     red = PatternFill(start_color="FFC7CE", fill_type="solid")
     yellow = PatternFill(start_color="FFEB9C", fill_type="solid")
     green = PatternFill(start_color="C6EFCE", fill_type="solid")
 
+    # Risk column index
     risk_col_idx = list(df.columns).index("Risk_Label") + 1
 
+    # Apply row color based on risk
     for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
         risk = row[risk_col_idx - 1].value
-        color = None
 
         if risk == "High Risk":
             color = red
         elif risk == "Medium Risk":
             color = yellow
-        elif risk == "Low Risk":
+        else:
             color = green
 
-        if color:
-            for cell in row:
-                cell.fill = color
+        for cell in row:
+            cell.fill = color
 
     wb.save(output_excel)
 
+    # Download button
     with open(output_excel, "rb") as f:
         st.download_button("⬇ Download Colored Excel Report", f, file_name=output_excel)
 
-    # ==================================================
-    # PDF REPORT GENERATION
-    # ==================================================
+
+    # PDF GENERATION FOR EACH CUSTOMER
+
     def generate_customer_pdf(row):
         cid = str(row["Customer_ID"])
         fname = f"Risk_Report_{cid}.pdf"
@@ -218,17 +230,18 @@ if uploaded_file:
         c.setFont("Helvetica-Bold", 18)
         c.drawString(50, h - 50, f"Customer Risk Report: {cid}")
 
+        # Basic info
         c.setFont("Helvetica", 12)
-        c.drawString(50, h - 90, "Basic Information")
+        c.drawString(50, h - 90, "📌 Basic Information")
         c.drawString(70, h - 120, f"Credit Limit: {row['Credit_Limit']}")
         c.drawString(70, h - 140, f"Utilisation %: {row['Utilisation_%']}")
         c.drawString(70, h - 160, f"DPD: {row['DPD']} days")
 
-        # Risk
+        # Risk section
         c.setFont("Helvetica-Bold", 14)
-        c.drawString(50, h - 200, " Risk Assessment")
+        c.drawString(50, h - 200, "🎯 Risk Assessment")
 
-        c.setFont("Helvetica", 12)
+        # Color based on risk
         if row["Risk_Label"] == "High Risk":
             c.setFillColor(colors.red)
         elif row["Risk_Label"] == "Medium Risk":
@@ -240,9 +253,9 @@ if uploaded_file:
         c.setFillColor(colors.black)
         c.drawString(70, h - 250, f"Risk Probability: {round(row['Risk_Probability'], 3)}")
 
-        # Flags
+        # Flags section
         c.setFont("Helvetica-Bold", 14)
-        c.drawString(50, h - 290, "Behavioural Flags")
+        c.drawString(50, h - 290, "🚩 Behavioural Flags")
 
         c.setFont("Helvetica", 12)
         y_pos = h - 320
@@ -251,7 +264,7 @@ if uploaded_file:
                 c.drawString(70, y_pos, f"- {col.replace('_', ' ')}")
                 y_pos -= 20
 
-        # Action
+        # Recommended Action
         c.setFont("Helvetica-Bold", 14)
         c.drawString(50, y_pos - 20, "📝 Recommended Action")
         c.setFont("Helvetica", 12)
@@ -263,7 +276,7 @@ if uploaded_file:
 
     # PDF DOWNLOAD SECTION
 
-    st.subheader(" Customer-Level PDF Reports")
+    st.subheader("📄 Customer-Level PDF Reports")
 
     customer_list = df["Customer_ID"].astype(str).tolist()
     selected_id = st.selectbox("Select Customer ID:", customer_list)
